@@ -14,16 +14,22 @@ class TinyFPGAB(object):
             self.progress = progress
 
     def is_bootloader_active(self):
-        for i in range(3):
-            self.wake()
-            self.read(0, 16)
-            self.wake()
-            devid = self.read_id()
-            expected_devid = '\x1f\x84\x01'
-            if devid == expected_devid:
-                return True
-            time.sleep(0.05)
-        return False
+        self.ser.timeout = 0.2
+        self.ser.writeTimeout = 0.2
+        try:
+            for i in range(3):
+                self.wake()
+                self.read(0, 16)
+                self.wake()
+                devid = self.read_id()
+                expected_devid = '\x1f\x84\x01'
+                if devid == expected_devid:
+                    return True
+                time.sleep(0.05)
+            return False
+        finally:
+            self.ser.timeout = None
+            self.ser.writeTimeout = None
 
     def cmd(self, opcode, addr=None, data='', read_len=0):
         assert isinstance(data, str)
@@ -280,8 +286,7 @@ if __name__ == '__main__':
             if isinstance(info, str):
                 print "    " + info
 
-        with serial.Serial(active_port, 115200, timeout=0.2,
-                           writeTimeout=0.2) as ser:
+        with serial.Serial(active_port, 115200) as ser:
             fpga = TinyFPGAB(ser, progress)
             (addr, bitstream) = fpga.slurp(args.program)
             if args.addr is not None:
@@ -302,7 +307,9 @@ if __name__ == '__main__':
     # boot the FPGA
     if args.boot:
         print "    Booting " + active_port
-        with serial.Serial(active_port, 115200, timeout=0.2,
-                           writeTimeout=0.2) as ser:
+        with serial.Serial(active_port, 115200) as ser:
             fpga = TinyFPGAB(ser)
+            if not fpga.is_bootloader_active():
+                print "    Bootloader not active"
+                sys.exit(1)
             fpga.boot()
